@@ -1,0 +1,21 @@
+[workspace]
+authors = ["Edoardo Marcora <edoardo.marcora@gmail.com>"]
+channels = ["conda-forge"]
+name = "pangolin_playground"
+platforms = ["osx-arm64"]
+version = "0.1.0"
+
+[tasks]
+
+[dependencies]
+python = "3.13.*"
+marimo = ">=0.18.4,<0.19"
+seaborn = ">=0.13.2,<0.14"
+matplotlib = ">=3.10.8,<4"
+numpy = ">=2.3.5,<3"
+pandas = ">=2.3.3,<3"
+openai = ">=2.13.0,<3"
+arviz = ">=0.23.0,<0.24"
+
+[pypi-dependencies]
+pangolin = { git = "https://github.com/justindomke/pangolin.git" }
