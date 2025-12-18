@@ -13,12 +13,13 @@ def _():
 @app.cell
 def _():
     from pangolin import interface as pi
-    from pangolin.blackjax import sample, E, var
-
+    from pangolin.blackjax import sample, E
+    import pangolin as pg
     import numpy as np
+    import arviz as az
     import seaborn as sns
     from matplotlib import pyplot as plt
-    return np, pi, plt, sample, sns
+    return az, np, pi, plt, sample, sns
 
 
 @app.cell
@@ -92,19 +93,18 @@ def _(observed, sample, theta, y):
 
 
 @app.cell
-def _(theta_samps):
-    # Since theta is a list of 8 scalar RVs, you get back a list of 8 length 10000 Numpy arrays,
-    # each containing samples or 1 RV / school.
-    [s.shape for s in theta_samps] == [(10000,)] * 8
+def _(az, theta_samps):
+    trace_posterior = az.from_dict({ "posterior": theta_samps })
+    az.plot_trace(trace_posterior)
     return
 
 
 @app.cell
-def _(plt, sns, theta_samps_1):
-    # plot
-    sns.swarmplot(theta_samps_1[::50, :], s=2)
+def _(np, plt, sns, theta_samps):
+    sns.swarmplot(np.array(theta_samps)[:,::50].T, s=2, zorder=0)
     plt.xlabel('school')
     plt.ylabel('treatment effect')
+    plt.gca()
     return
 
 
@@ -160,18 +160,11 @@ def _(np, observed, sample, theta_1, y_1):
 
 
 @app.cell
-def _(theta_samps_1):
-    # now, the samples are one big array
-    theta_samps_1.shape
-    return
-
-
-@app.cell
 def _(plt, sns, theta_samps_1):
-    # plot
-    sns.swarmplot(theta_samps_1[::50, :], s=2)
+    sns.swarmplot(theta_samps_1[::50,:], s=2, zorder=0)
     plt.xlabel('school')
     plt.ylabel('treatment effect')
+    plt.gca()
     return
 
 
