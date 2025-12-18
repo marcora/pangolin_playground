@@ -12,13 +12,15 @@ def _():
 
 @app.cell
 def _():
-    from pangolin import interface as pi
-    from pangolin.blackjax import sample, E
     import pangolin as pg
     import numpy as np
+    import pandas as pd
     import arviz as az
     import seaborn as sns
+
     from matplotlib import pyplot as plt
+    from pangolin import interface as pi
+    from pangolin.blackjax import sample, E
     return az, np, pi, plt, sample, sns
 
 
@@ -72,7 +74,8 @@ def _(num_schools, pi, stddevs):
     tau = pi.exp(pi.normal(5,1))
     theta = [pi.normal(mu,tau) for i in range(num_schools)]
     y = [pi.normal(theta[i],stddevs[i]) for i in range(num_schools)]
-    return theta, y
+    y_pred = [pi.normal(theta[i],tau) for i in range(num_schools)]
+    return theta, y, y_pred
 
 
 @app.cell
@@ -88,22 +91,56 @@ def _(pi, y):
 @app.cell
 def _(observed, sample, theta, y):
     # do inference using pangolin's interface to blackjax
-    theta_samps = sample(theta, y, observed, niter=10000)
-    return (theta_samps,)
+    theta_smps = sample(theta, y, observed, niter=10000)
+    return (theta_smps,)
 
 
 @app.cell
-def _(az, theta_samps):
-    trace_posterior = az.from_dict({ "posterior": theta_samps })
-    az.plot_trace(trace_posterior)
+def _(az, theta_smps):
+    posterior = {f"theta_{i}": smps for i, smps in enumerate(theta_smps)}
+    idata = az.from_dict(posterior=posterior)
+    return (idata,)
+
+
+@app.cell
+def _(az, idata):
+    az.plot_trace(idata)
     return
 
 
 @app.cell
-def _(np, plt, sns, theta_samps):
-    sns.swarmplot(np.array(theta_samps)[:,::50].T, s=2, zorder=0)
+def _(az, idata):
+    az.summary(idata)
+    return
+
+
+@app.cell
+def _(az, idata):
+    az.plot_posterior(idata)
+    return
+
+
+@app.cell
+def _(np, plt, sns, theta_smps):
+    sns.swarmplot(np.array(theta_smps)[:,::50].T, s=2, zorder=0)
     plt.xlabel('school')
-    plt.ylabel('treatment effect')
+    plt.ylabel('real treatment effect (theta)')
+    plt.gca()
+    return
+
+
+@app.cell
+def _(observed, sample, y, y_pred):
+    # do inference using pangolin's interface to blackjax
+    y_pred_smps = sample(y_pred, y, observed, niter=10000)
+    return (y_pred_smps,)
+
+
+@app.cell
+def _(np, plt, sns, y_pred_smps):
+    sns.swarmplot(np.array(y_pred_smps)[:,::50].T, s=2, zorder=0)
+    plt.xlabel('school')
+    plt.ylabel('measured treatment effect (y_pred)')
     plt.gca()
     return
 
@@ -155,13 +192,44 @@ def _(mu_1, pi, tau_1, theta_1, y_1):
 @app.cell
 def _(np, observed, sample, theta_1, y_1):
     # inference
-    theta_samps_1 = sample(theta_1, y_1, np.array(observed), niter=10000)
-    return (theta_samps_1,)
+    theta_smps_1 = sample(theta_1, y_1, np.array(observed), niter=10000)
+    return (theta_smps_1,)
 
 
 @app.cell
-def _(plt, sns, theta_samps_1):
-    sns.swarmplot(theta_samps_1[::50,:], s=2, zorder=0)
+def _(az, np, theta_smps_1):
+    samples_1 = np.asarray(theta_smps_1)
+    draws, n_params = samples_1.shape
+    posterior_1 = {
+        f"param_{i}": samples_1[:, i].reshape(1, draws)
+        for i in range(n_params)
+    }
+
+    idata_1 = az.from_dict(posterior=posterior_1)
+    return (idata_1,)
+
+
+@app.cell
+def _(az, idata_1):
+    az.plot_trace(idata_1)
+    return
+
+
+@app.cell
+def _(az, idata_1):
+    az.summary(idata_1)
+    return
+
+
+@app.cell
+def _(az, idata_1):
+    az.plot_posterior(idata_1)
+    return
+
+
+@app.cell
+def _(plt, sns, theta_smps_1):
+    sns.swarmplot(theta_smps_1[::50,:], s=2, zorder=0)
     plt.xlabel('school')
     plt.ylabel('treatment effect')
     plt.gca()
