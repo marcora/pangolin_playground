@@ -29,20 +29,16 @@ def _():
 
 @app.cell
 def _(pd):
-    # -----------------------------------------------------
-    # 1. Load sleepstudy data (R's lme4::sleepstudy)
-    # -----------------------------------------------------
-
     sleepstudy = pd.read_csv(
         "https://vincentarelbundock.github.io/Rdatasets/csv/lme4/sleepstudy.csv"
     )
+
     sleepstudy.head()
     return (sleepstudy,)
 
 
 @app.cell
 def _(sleepstudy):
-    # Drop the first index column that Rdatasets adds
     sleepstudy.drop(columns=sleepstudy.columns[0], inplace=True)
     return
 
@@ -55,14 +51,14 @@ def _(mo):
     $$
     \begin{aligned}
     y_i &\sim \mathcal{N}(\mu_i, \sigma_y) \\
-    \mu_i &= (\beta_0 + a_{s[i]}) + (\beta_1 + b_{s[i]}) \, x_i \\
-    a_s &\sim \mathcal{N}(0, \sigma_a) \\
-    b_s &\sim \mathcal{N}(0, \sigma_b) \\
+    \mu_i &= (\beta_0 + a_{s_i}) + (\beta_1 + b_{s_i}) \, x_i \\
     \beta_0 &\sim \mathcal{N}(0, 1000) \\
     \beta_1 &\sim \mathcal{N}(0, 1000) \\
+    a_s &\sim \mathcal{N}(0, \sigma_a) \\
+    b_s &\sim \mathcal{N}(0, \sigma_b) \\
     \sigma_a &= \exp(\mathcal{N}(0, 2)) \\
     \sigma_b &= \exp(\mathcal{N}(0, 2)) \\
-    \sigma_y &= \exp(\mathcal{N}(0, 2))
+    \sigma_y &= \exp(\mathcal{N}(0, 2)) \\
     \end{aligned}
     $$
     """)
@@ -88,32 +84,35 @@ def _(J, N, np, pi, sample, sleepstudy):
     x = sleepstudy["Days"].values.astype(float)
     subjects = sleepstudy["Subject"].values
 
-    # s_i: subject index 0..J-1 for each observation
     _, s = np.unique(subjects, return_inverse=True)
+
+    sigma_y = pi.exp(pi.normal(0.0, 2.0))
+    sigma_a = pi.exp(pi.normal(0.0, 2.0))
+    sigma_b = pi.exp(pi.normal(0.0, 2.0))
+
+    a = []
+    b = []
+
+    for j in range(J):
+        a.append(pi.normal(0.0, sigma_a))
+        b.append(pi.normal(0.0, sigma_b))
 
     beta0 = pi.normal(0.0, 1000.0)
     beta1 = pi.normal(0.0, 1000.0)
-    sigma_a = pi.exp(pi.normal(0.0, 2.0))
-    sigma_b = pi.exp(pi.normal(0.0, 2.0))
-    sigma_y = pi.exp(pi.normal(0.0, 2.0))
-    a = [pi.normal(0.0, sigma_a) for j in range(J)]
-    b = [pi.normal(0.0, sigma_b) for j in range(J)]
 
-    y = [
-        pi.normal(
-            beta0 + a[s[i]] + (beta1 + b[s[i]]) * x[i],
-            sigma_y
-        )
-        for i in range(N)
-    ]
+    y = []
+    y_pred = []
 
-    params = [beta0, beta1, sigma_y] + a + b
+    for i in range(N):
+        mu = (beta0 + a[s[i]]) + (beta1 + b[s[i]]) * x[i]
+        y.append(pi.normal(mu, sigma_y))
+        y_pred.append(pi.normal(mu, sigma_y))
 
     samples = sample(
-        params,
+        y_pred,
         y,
         y_obs.tolist(),
-        niter=4000
+        niter=1000
     )
     return (samples,)
 
