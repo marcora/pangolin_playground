@@ -21,10 +21,12 @@ def _():
     import numpy as np
     import pandas as pd
     import seaborn as sns
-    from pangolin import interface as pi
-    from pangolin.blackjax import sample, E, var, std
+    import arviz as az
+
     from matplotlib import pyplot as plt
-    return np, pd, pi, sample
+    from pangolin import interface as pi
+    from pangolin.blackjax import sample, sample_arviz, E
+    return np, pd, pg, pi, plt, sns
 
 
 @app.cell
@@ -66,62 +68,50 @@ def _(mo):
 
 
 @app.cell
-def _(sleepstudy):
-    # J subjects
-    J = len(sleepstudy["Subject"].unique())
-
-    # N observations
-    N = sleepstudy.shape[0]
-
-    print(f"N = {N}, J = {J}")
-    print(sleepstudy.head())
-    return J, N
-
-
-@app.cell
-def _(J, N, np, pi, sample, sleepstudy):
+def _(np, pg, pi, sleepstudy):
+    # data -------------------------------------------------------
     y_obs = sleepstudy["Reaction"].values.astype(float)
-    x = sleepstudy["Days"].values.astype(float)
-    subjects = sleepstudy["Subject"].values
+    x     = sleepstudy["Days"].values.astype(float)
+    subj  = sleepstudy["Subject"].values.astype(str)
 
-    _, s = np.unique(subjects, return_inverse=True)
+    _, s  = np.unique(subj, return_inverse=True)
+    N     = len(y_obs)
+    J     = len(np.unique(s))
 
-    sigma_y = pi.exp(pi.normal(0.0, 2.0))
-    sigma_a = pi.exp(pi.normal(0.0, 2.0))
-    sigma_b = pi.exp(pi.normal(0.0, 2.0))
+    # priors -----------------------------------------------------
+    beta0 = pi.normal(0., 1000.)
+    beta1 = pi.normal(0., 1000.)
 
-    a = []
-    b = []
+    sigma_y = pi.exp(pi.normal(0., 2.))
+    sigma_a = pi.exp(pi.normal(0., 2.))
+    sigma_b = pi.exp(pi.normal(0., 2.))
 
-    for j in range(J):
-        a.append(pi.normal(0.0, sigma_a))
-        b.append(pi.normal(0.0, sigma_b))
+    a = [pi.normal(0., sigma_a) for _ in range(J)]
+    b = [pi.normal(0., sigma_b) for _ in range(J)]
 
-    beta0 = pi.normal(0.0, 1000.0)
-    beta1 = pi.normal(0.0, 1000.0)
+    # mu linpred ---------------------------------------------
+    mu = [
+        beta0 + a[s[i]] + (beta1 + b[s[i]]) * x[i]
+        for i in range(N)
+    ]
 
-    y = []
-    y_pred = []
+    # likelihood --------------------------------------------------
+    y      = [pi.normal(mu[i], sigma_y) for i in range(N)]
 
-    for i in range(N):
-        mu = (beta0 + a[s[i]]) + (beta1 + b[s[i]]) * x[i]
-        y.append(pi.normal(mu, sigma_y))
-        y_pred.append(pi.normal(mu, sigma_y))
+    # posterior predictive ----------------------------------------
+    y_pred = [pi.normal(mu[i], sigma_y) for i in range(N)]
 
-    samples = sample(
-        y_pred,
-        y,
-        y_obs.tolist(),
-        niter=1000
-    )
+    # inference ---------------------------------------------------
+    params  = y_pred
+    samples = pg.blackjax.sample(params, y, y_obs.tolist())
     return (samples,)
 
 
 @app.cell
-def _(pd, samples):
-    df = pd.DataFrame({f"param_{i}": samples[i] for i in range(len(samples))})
-
-    df.head()
+def _(plt, samples, sns):
+    [sns.kdeplot(sample, legend=False, alpha=0.1) for sample in samples]
+    plt.legend()
+    plt.show()
     return
 
 
