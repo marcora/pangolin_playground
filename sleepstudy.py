@@ -25,7 +25,7 @@ def _():
 
     from pangolin import interface as pi
     from pangolin.blackjax import sample, sample_arviz, E
-    return np, pd, pg, pi, sns
+    return az, np, pd, pg, pi, sns
 
 
 @app.cell(hide_code=True)
@@ -85,7 +85,7 @@ def _(np, subjects, y_obs):
     _, s = np.unique(subjects, return_inverse=True)
     N = len(y_obs)
     J = len(np.unique(s))
-    return J, N, s
+    return J, s
 
 
 @app.cell(hide_code=True)
@@ -105,9 +105,12 @@ def _(J, pi):
     sigma_a = pi.exp(pi.normal(0, 2))
     sigma_b = pi.exp(pi.normal(0, 2))
 
-    a = [pi.normal(0, sigma_a) for _ in range(J)]
-    b = [pi.normal(0, sigma_b) for _ in range(J)]
-    return a, alpha, b, beta, sigma_y
+    a = pi.vmap(pi.normal, None, J)(0, sigma_a)
+    b = pi.vmap(pi.normal, None, J)(0, sigma_b)
+
+    beta0 = pi.normal(0, 1000)
+    beta1 = pi.normal(0, 1000)
+    return a, b, beta0, beta1, sigma_y
 
 
 @app.cell(hide_code=True)
@@ -119,12 +122,10 @@ def _(mo):
 
 
 @app.cell
-def _(N, a, alpha, b, beta, pi, s, sigma_y, x):
-    mu = [alpha + a[s[i]] + (beta + b[s[i]]) * x[i] for i in range(N)]
-
-    y = [pi.normal(mu[i], sigma_y) for i in range(N)]
-
-    y_pred = [pi.normal(mu[i], sigma_y) for i in range(N)]
+def _(a, b, beta0, beta1, pi, s, sigma_y, x):
+    mu = (beta0 + a[s]) + (beta1 + b[s]) * x
+    y = pi.vmap(pi.normal, [0,None])(mu, sigma_y)
+    y_pred = pi.vmap(pi.normal, [0,None])(mu, sigma_y)
     return y, y_pred
 
 
@@ -145,6 +146,18 @@ def _(pg, y, y_obs, y_pred):
 @app.cell
 def _(samples, sns):
     [sns.kdeplot(sample, legend=False, alpha=0.1) for sample in samples]
+    return
+
+
+@app.cell
+def _(pg, y, y_obs, y_pred):
+    idata = pg.blackjax.sample_arviz(dict(y_pred = y_pred), y, y_obs.tolist())
+    return (idata,)
+
+
+@app.cell
+def _(az, idata):
+    az.plot_trace(idata)
     return
 
 
