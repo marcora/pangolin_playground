@@ -25,7 +25,7 @@ def _():
 
     from pangolin import interface as pi
     from pangolin.blackjax import sample, sample_arviz, E
-    return az, np, pd, pg, pi, sns
+    return az, np, pd, pg, pi
 
 
 @app.cell(hide_code=True)
@@ -50,28 +50,6 @@ def _(sleepstudy):
     return
 
 
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    classic random-intercept + random-slope model:
-
-    $$
-    \begin{aligned}
-    y_i &\sim \mathcal{N}(\mu_i, \sigma_y) \\
-    \mu_i &= (\alpha + a_{s_i}) + (\beta + b_{s_i}) \, x_i \\
-    \alpha &\sim \mathcal{N}(0, 1000) \\
-    \beta &\sim \mathcal{N}(0, 1000) \\
-    a_s &\sim \mathcal{N}(0, \sigma_a) \\
-    b_s &\sim \mathcal{N}(0, \sigma_b) \\
-    \sigma_a &= \exp(\mathcal{N}(0, 2)) \\
-    \sigma_b &= \exp(\mathcal{N}(0, 2)) \\
-    \sigma_y &= \exp(\mathcal{N}(0, 2)) \\
-    \end{aligned}
-    $$
-    """)
-    return
-
-
 @app.cell
 def _(sleepstudy):
     y_obs = sleepstudy["Reaction"].values.astype(float)
@@ -85,48 +63,64 @@ def _(np, subjects, y_obs):
     _, s = np.unique(subjects, return_inverse=True)
     N = len(y_obs)
     J = len(np.unique(s))
-    return J, s
+    return J, N, s
 
 
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## Prior
+    ## Model
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    Classic random-intercept/random-slope model:
+
+    $$
+    \begin{aligned}
+    y_i &\sim \mathcal{N}(\mu_i, \sigma^y) \\
+    \mu_i &= (\alpha + a_{s[i]}) + (\beta + b_{s[i]}) \, x_i \\
+    \sigma^y &= \exp(\mathcal{N}(0, 2)) \\
+    \alpha &\sim \mathcal{N}(0, 1000) \\
+    \beta &\sim \mathcal{N}(0, 1000) \\
+    a_s &\sim \mathcal{N}(0, \sigma^a) \\
+    b_s &\sim \mathcal{N}(0, \sigma^b) \\
+    \sigma^a &= \exp(\mathcal{N}(0, 2)) \\
+    \sigma^b &= \exp(\mathcal{N}(0, 2)) \\
+    \end{aligned}
+    $$
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## Priors and likelihood
     """)
     return
 
 
 @app.cell
-def _(J, pi):
+def _(J, N, pi, s, x):
+    sigma_a = pi.exp(pi.normal(0, 2))
+    sigma_b = pi.exp(pi.normal(0, 2))
+
+    a = [pi.normal(0, sigma_a) for _ in range(J)]
+    b = [pi.normal(0, sigma_b) for _ in range(J)]
+
     alpha = pi.normal(0, 1000)
     beta = pi.normal(0, 1000)
 
     sigma_y = pi.exp(pi.normal(0, 2))
-    sigma_a = pi.exp(pi.normal(0, 2))
-    sigma_b = pi.exp(pi.normal(0, 2))
 
-    a = pi.vmap(pi.normal, None, J)(0, sigma_a)
-    b = pi.vmap(pi.normal, None, J)(0, sigma_b)
+    mu = [alpha + a[s[i]] + (beta + b[s[i]]) * x[i] for i in range(N)]
 
-    beta0 = pi.normal(0, 1000)
-    beta1 = pi.normal(0, 1000)
-    return a, b, beta0, beta1, sigma_y
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ## Likelihood
-    """)
-    return
-
-
-@app.cell
-def _(a, b, beta0, beta1, pi, s, sigma_y, x):
-    mu = (beta0 + a[s]) + (beta1 + b[s]) * x
-    y = pi.vmap(pi.normal, [0,None])(mu, sigma_y)
-    y_pred = pi.vmap(pi.normal, [0,None])(mu, sigma_y)
-    return y, y_pred
+    y = [pi.normal(mu[i], sigma_y) for i in range(N)]
+    return alpha, beta, y
 
 
 @app.cell(hide_code=True)
@@ -138,21 +132,21 @@ def _(mo):
 
 
 @app.cell
-def _(pg, y, y_obs, y_pred):
-    samples = pg.blackjax.sample(y_pred, y, y_obs.tolist())
-    return (samples,)
-
-
-@app.cell
-def _(samples, sns):
-    [sns.kdeplot(sample, legend=False, alpha=0.1) for sample in samples]
+def _(alpha, beta, pg, y, y_obs):
+    samples = pg.blackjax.sample((alpha, beta), y, y_obs.tolist())
     return
 
 
 @app.cell
-def _(pg, y, y_obs, y_pred):
-    idata = pg.blackjax.sample_arviz(dict(y_pred = y_pred), y, y_obs.tolist())
+def _(alpha, beta, pg, y, y_obs):
+    idata = pg.blackjax.sample_arviz({'alpha':alpha, 'beta':beta}, y, y_obs.tolist())
     return (idata,)
+
+
+@app.cell
+def _(az, idata):
+    az.summary(idata)
+    return
 
 
 @app.cell
