@@ -62,8 +62,8 @@ def _(sleepstudy):
 def _(np, subjects, y_obs):
     _, s = np.unique(subjects, return_inverse=True)
     N = len(y_obs)
-    J = len(np.unique(s))
-    return J, N, s
+    S = len(np.unique(s))
+    return N, S, s
 
 
 @app.cell(hide_code=True)
@@ -81,15 +81,15 @@ def _(mo):
 
     $$
     \begin{aligned}
-    y_i &\sim \mathcal{N}(\mu_i, \sigma^y) \\
-    \mu_i &= (\alpha + a_{s[i]}) + (\beta + b_{s[i]}) \, x_i \\
-    \sigma^y &= \exp(\mathcal{N}(0, 2)) \\
-    \alpha &\sim \mathcal{N}(0, 1000) \\
-    \beta &\sim \mathcal{N}(0, 1000) \\
-    a_s &\sim \mathcal{N}(0, \sigma^a) \\
-    b_s &\sim \mathcal{N}(0, \sigma^b) \\
-    \sigma^a &= \exp(\mathcal{N}(0, 2)) \\
-    \sigma^b &= \exp(\mathcal{N}(0, 2)) \\
+    y[n] &\sim \mathcal{N}\big(\mu[n],\, \sigma_y\big), && \text{for } n = 1,\dots,N\\[6pt]
+    \mu[n] &= \big(\alpha + a[s[n]]\big) \;+\; \big(\beta + b[s[n]]\big)\, x[n], && \text{for } n = 1,\dots,N\\[8pt]
+    \log\sigma_y &\sim \mathcal{N}(0,2) \\[6pt]
+    \alpha &\sim \mathcal{N}(0,1000) \\[4pt]
+    \beta &\sim \mathcal{N}(0,1000) \\[8pt]
+    a[s] &\sim \mathcal{N}(0, \sigma_a), && \text{for } s = 1,\dots,S\\[6pt]
+    b[s] &\sim \mathcal{N}(0, \sigma_b), && \text{for } s = 1,\dots,S\\[8pt]
+    \sigma_a &\sim \exp \mathcal{N}(0,2) \\[4pt]
+    \sigma_b &\sim \exp \mathcal{N}(0,2)
     \end{aligned}
     $$
     """)
@@ -105,21 +105,21 @@ def _(mo):
 
 
 @app.cell
-def _(J, N, pi, s, x):
+def _(N, S, pi, s, x):
     sigma_a = pi.exp(pi.normal(0, 2))
     sigma_b = pi.exp(pi.normal(0, 2))
 
-    a = [pi.normal(0, sigma_a) for _ in range(J)]
-    b = [pi.normal(0, sigma_b) for _ in range(J)]
+    a = [pi.normal(0, sigma_a) for s in range(S)]
+    b = [pi.normal(0, sigma_b) for s in range(S)]
 
     alpha = pi.normal(0, 1000)
     beta = pi.normal(0, 1000)
 
     sigma_y = pi.exp(pi.normal(0, 2))
 
-    mu = [alpha + a[s[i]] + (beta + b[s[i]]) * x[i] for i in range(N)]
+    mu = [alpha + a[s[n]] + (beta + b[s[n]]) * x[n] for n in range(N)]
 
-    y = [pi.normal(mu[i], sigma_y) for i in range(N)]
+    y = [pi.normal(mu[n], sigma_y) for n in range(N)]
     return alpha, beta, y
 
 
